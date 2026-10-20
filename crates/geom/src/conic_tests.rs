@@ -6,6 +6,7 @@ use crate::*;
 struct Rng(u64);
 
 impl Rng {
+    /// Next xorshift64* value.
     fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
@@ -14,9 +15,11 @@ impl Rng {
         self.0 = x;
         x.wrapping_mul(0x2545F4914F6CDD1D)
     }
+    /// Uniform in `[lo, hi]`.
     fn range(&mut self, lo: f64, hi: f64) -> f64 {
         lo + (hi - lo) * (self.next() >> 11) as f64 / (1u64 << 53) as f64
     }
+    /// A random full ellipse near `offset` with axes up to `size`.
     fn ellipse(&mut self, offset: Vec2, size: f64) -> Ellipse {
         let center = offset + Vec2::new(self.range(-size, size), self.range(-size, size));
         let ang = self.range(0.0, TAU);
@@ -25,15 +28,18 @@ impl Rng {
     }
 }
 
+/// True when two points are within `tol`.
 fn close(a: Vec2, b: Vec2, tol: f64) -> bool {
     a.dist(b) <= tol
 }
 
+/// Points sorted by x, then y, for order-independent comparison.
 fn sorted(mut v: Vec<Vec2>) -> Vec<Vec2> {
     v.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
     v
 }
 
+/// Asserts that two point sets match one to one within `tol`.
 fn assert_points(got: Vec<Vec2>, want: &[Vec2], tol: f64) {
     let got = sorted(got);
     let want = sorted(want.to_vec());
@@ -43,12 +49,14 @@ fn assert_points(got: Vec<Vec2>, want: &[Vec2], tol: f64) {
     }
 }
 
+/// Just the points of `(point, t1, t2)` results.
 fn points(v: Vec<(Vec2, f64, f64)>) -> Vec<Vec2> {
     v.into_iter().map(|(p, _, _)| p).collect()
 }
 
 // ---------- known answers ----------
 
+/// Secant, vertical, tangent and missing lines against a known ellipse, at the origin and far from it.
 #[test]
 fn line_ellipse_known_answer_and_params() {
     for off in [Vec2::ZERO, Vec2::new(3.0e6, -7.0e6)] {
@@ -72,6 +80,7 @@ fn line_ellipse_known_answer_and_params() {
     }
 }
 
+/// Two crossed ellipses meet in four known points, also rotated and at 1e6–1e7.
 #[test]
 fn crossed_ellipses_four_points_rotated_and_far_from_origin() {
     // x²/4 + y² = 1 and x² + y²/4 = 1 meet at (±2/√5, ±2/√5).
@@ -90,6 +99,7 @@ fn crossed_ellipses_four_points_rotated_and_far_from_origin() {
     }
 }
 
+/// Inner and outer tangencies, disjoint, nested and coincident curves.
 #[test]
 fn tangencies_give_single_points() {
     // Inner double tangency: x²/4 + y² = 1 and the unit circle touch at (0, ±1).
@@ -107,6 +117,7 @@ fn tangencies_give_single_points() {
     assert!(ellipse_ellipse(&e, &Ellipse::full(Vec2::ZERO, Vec2::new(-2.0, 0.0), 0.5)).is_empty());
 }
 
+/// A circle cutting an ellipse in four known points far from the origin.
 #[test]
 fn circle_ellipse_two_points_known_answer() {
     // x²/4 + y² = 1 and the circle of radius √2 at the origin: x² = 4/3, y² = 2/3.
@@ -117,6 +128,7 @@ fn circle_ellipse_two_points_known_answer() {
     assert_points(points(circle_ellipse(&c, &e)), &want, 1e-8);
 }
 
+/// Only the common points on both elliptical arcs are kept.
 #[test]
 fn arcs_filter_by_sweep() {
     let k = 2.0 / 5f64.sqrt();
@@ -127,6 +139,7 @@ fn arcs_filter_by_sweep() {
     assert_points(points(ellipse_arcs(&e1, &e2)), &[Vec2::new(k, k)], 1e-9);
 }
 
+/// Conic from an ellipse and back, circles, line pairs and pencil members.
 #[test]
 fn conic_round_trips_and_line_pairs() {
     let e = Ellipse::full(Vec2::new(12.0, -3.0), Vec2::new(3.0, 4.0), 0.3);
@@ -190,6 +203,7 @@ fn brute_roots(e1: &Ellipse, q2: &Conic) -> Option<Vec<Vec2>> {
     Some(out)
 }
 
+/// Random ellipse pairs agree with sign-change sampling plus bisection.
 #[test]
 fn random_ellipse_pairs_match_brute_force() {
     let mut rng = Rng(0x9E3779B97F4A7C15);
@@ -229,6 +243,7 @@ fn random_ellipse_pairs_match_brute_force() {
     assert!(histogram[0] > 100 && histogram[2] > 100 && histogram[4] > 50, "{histogram:?}");
 }
 
+/// Random line–ellipse hits lie on both curves with consistent parameters.
 #[test]
 fn random_lines_match_closed_form_residuals() {
     let mut rng = Rng(0xD1B54A32D192ED03);
@@ -249,6 +264,7 @@ fn random_lines_match_closed_form_residuals() {
 
 // ---------- closest point ----------
 
+/// Reference distance from `p` to the curve by dense sampling.
 fn sampled_closest(e: &Ellipse, p: Vec2) -> f64 {
     let n = 40_000;
     let sweep = e.sweep();
@@ -259,6 +275,7 @@ fn sampled_closest(e: &Ellipse, p: Vec2) -> f64 {
     best
 }
 
+/// Closest points on the axes and the off-axis feet from inside near the centre.
 #[test]
 fn closest_point_known_answers() {
     let e = Ellipse::full(Vec2::new(1.0e6, 1.0e6), Vec2::new(4.0, 0.0), 0.5);
@@ -277,6 +294,7 @@ fn closest_point_known_answers() {
     assert!((got.x - 2.0).abs() < 1e-9 && (got.y.abs() - 3f64.sqrt()).abs() < 1e-9, "{got:?}");
 }
 
+/// The exact closest point is never farther than dense sampling, on ellipses and arcs.
 #[test]
 fn closest_point_beats_dense_sampling_on_ellipses_and_arcs() {
     let mut rng = Rng(0xA0761D6478BD642F);
@@ -297,6 +315,7 @@ fn closest_point_beats_dense_sampling_on_ellipses_and_arcs() {
     }
 }
 
+/// Ratios above 1 and negative ratios give correct closest points.
 #[test]
 fn ratio_above_one_and_negative_ratio_are_handled() {
     let p = Vec2::new(0.3, 9.0);
@@ -311,6 +330,7 @@ fn ratio_above_one_and_negative_ratio_are_handled() {
 
 // ---------- hostile input ----------
 
+/// NaN, infinities, zeros and extreme values never panic and yield only finite points.
 #[test]
 fn hostile_input_never_panics() {
     let bad = [f64::NAN, f64::INFINITY, -f64::INFINITY, 0.0, -0.0, 1e308, -1e308, 1e-310, f64::MIN_POSITIVE];

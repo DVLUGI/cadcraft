@@ -37,6 +37,7 @@ type M3 = [[f64; 3]; 3];
 type HLine = [f64; 3];
 
 impl Conic {
+    /// Conic from its six coefficients `a·x² + b·xy + c·y² + d·x + e·y + f`.
     pub const fn new(a: f64, b: f64, c: f64, d: f64, e: f64, f: f64) -> Self {
         Conic { a, b, c, d, e, f }
     }
@@ -79,6 +80,7 @@ impl Conic {
         (q.is_finite() && r > 0.0).then_some(q)
     }
 
+    /// True when all six coefficients are finite.
     pub fn is_finite(&self) -> bool {
         [self.a, self.b, self.c, self.d, self.e, self.f].iter().all(|v| v.is_finite())
     }
@@ -120,10 +122,12 @@ impl Conic {
         }
     }
 
+    /// Largest coefficient magnitude (the normalisation scale).
     fn max_abs(&self) -> f64 {
         [self.a, self.b, self.c, self.d, self.e, self.f].iter().fold(0.0_f64, |m, v| m.max(v.abs()))
     }
 
+    /// Symmetric homogeneous 3×3 matrix of the conic.
     fn matrix(&self) -> M3 {
         [[self.a, self.b * 0.5, self.d * 0.5], [self.b * 0.5, self.c, self.e * 0.5], [self.d * 0.5, self.e * 0.5, self.f]]
     }
@@ -173,6 +177,7 @@ struct Frame {
 }
 
 impl Frame {
+    /// Frame of an ellipse; `None` when its axes are degenerate or not finite.
     fn of(el: &Ellipse) -> Option<Frame> {
         let (u, v) = (el.major, el.minor());
         let (lu, lv) = (u.len2(), v.len2());
@@ -183,11 +188,13 @@ impl Frame {
         Some(Frame { center: el.center, u, v, inv_u: u / lu, inv_v: v / lv })
     }
 
+    /// World point to unit-circle coordinates.
     fn to_local(&self, w: Vec2) -> Vec2 {
         let d = w - self.center;
         Vec2::new(self.inv_u.dot(d), self.inv_v.dot(d))
     }
 
+    /// Unit-circle coordinates to world point.
     fn to_world(&self, p: Vec2) -> Vec2 {
         self.center + self.u * p.x + self.v * p.y
     }
@@ -405,20 +412,24 @@ fn polish(circle: &Conic, q: &Conic, mut p: Vec2) -> Option<Vec2> {
 
 // ---------- small exact helpers ----------
 
+/// Homogeneous line through two points (cross product of their homogeneous coordinates).
 fn line_through(p: Vec2, q: Vec2) -> HLine {
     [q.y - p.y, p.x - q.x, q.x * p.y - p.x * q.y]
 }
 
+/// Determinant of a 3×3 matrix (cofactor expansion along the first row).
 fn det3(m: &M3) -> f64 {
     m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
         + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
 }
 
+/// Adjugate (transposed cofactor matrix) of a 3×3 matrix.
 fn adjugate(m: &M3) -> M3 {
     let c = |r0: usize, r1: usize, c0: usize, c1: usize| m[r0][c0] * m[r1][c1] - m[r0][c1] * m[r1][c0];
     [[c(1, 2, 1, 2), -c(0, 2, 1, 2), c(0, 1, 1, 2)], [-c(1, 2, 0, 2), c(0, 2, 0, 2), -c(0, 1, 0, 2)], [c(1, 2, 0, 1), -c(0, 2, 0, 1), c(0, 1, 0, 1)]]
 }
 
+/// `a + lambda · b` for 3×3 matrices.
 fn add_m3(a: &M3, b: &M3, lambda: f64) -> M3 {
     let mut m = *a;
     for (row, brow) in m.iter_mut().zip(b) {
@@ -429,6 +440,7 @@ fn add_m3(a: &M3, b: &M3, lambda: f64) -> M3 {
     m
 }
 
+/// `s · a` for a 3×3 matrix.
 fn scale_m3(a: &M3, s: f64) -> M3 {
     let mut m = *a;
     m.iter_mut().flatten().for_each(|v| *v *= s);
@@ -581,6 +593,7 @@ fn closest_first_quadrant(e0: f64, e1: f64, y0: f64, y1: f64) -> (f64, f64) {
     (e0, 0.0)
 }
 
+/// Root `s` of Eberly's monotone function `(r0·z0/(s+r0))² + (z1/(s+1))² − 1` by bisection.
 fn eberly_root(r0: f64, z0: f64, z1: f64, g: f64) -> f64 {
     let n0 = r0 * z0;
     let mut s0 = z1 - 1.0;
